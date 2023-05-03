@@ -6,31 +6,38 @@ import (
 	"strings"
 )
 
-type CVariable struct {
-	parseString string
-	Struct      string `json:"struct"`
-	Typename    string `json:"typename"`
-	Pointer     string `json:"pointer"`
-	Variable    string `json:"variable"`
-
-	Value        string `json:"value"`
-	errorInfo    string
-	isParseError bool
-	process      func(string)
-}
-
 func skipSpace(ctx string) string {
 	return strings.TrimSpace(ctx)
 }
 
+type CVariable struct {
+	parseString    string
+	StructKeywords string `json:"struct_keywords,omitempty"`
+	Typename       string `json:"typename,omitempty"`
+	Pointer        string `json:"pointer,omitempty"`
+	Variable       string `json:"variable,omitempty"`
+	Value          string `json:"value,omitempty"`
+	errorInfo      string
+	isParseError   bool
+	process        func(string)
+	Struct         *CStruct `json:"struct,omitempty"`
+}
+
 func (c *CVariable) toString() string {
 	var varData string
-	if c.Struct == "" {
+	if c.StructKeywords == "" {
 		varData = fmt.Sprintf("%s%s %s", c.Typename, c.Pointer, c.Variable)
 	} else {
-		varData = fmt.Sprintf("%s %s%s %s", c.Struct, c.Typename, c.Pointer, c.Variable)
+		varData = fmt.Sprintf("%s %s%s %s", c.StructKeywords, c.Typename, c.Pointer, c.Variable)
 	}
 	return varData
+}
+
+func (c *CVariable) parseStruct(ctx string) {
+	c.Struct = &CStruct{}
+	c.Struct.Parse(c.parseString)
+	c.parseString = c.Struct.parseString
+	c.process = c.parseVariable
 }
 
 func (c *CVariable) parseError(ctx string) {
@@ -39,13 +46,22 @@ func (c *CVariable) parseError(ctx string) {
 	c.isParseError = true
 }
 
-func (c *CVariable) parseStruct(ctx string) {
+func (c *CVariable) parseStructKeywords(ctx string) {
 	re := regexp.MustCompile("^struct")
 	c.process = c.parseTypename
+	tmp := c.parseString
 	if loc := re.FindStringIndex(ctx); loc != nil {
-		c.Struct = ctx[:loc[1]]
+		c.StructKeywords = ctx[:loc[1]]
 		c.parseString = c.parseString[loc[1]:]
 	}
+
+	c.parseString = skipSpace(c.parseString)
+
+	if c.parseString[0] == '{' {
+		c.parseString = tmp
+		c.process = c.parseStruct
+	}
+
 }
 
 func (c *CVariable) parseTypename(ctx string) {
@@ -82,6 +98,13 @@ func (c *CVariable) parseVariable(ctx string) {
 		c.process = c.parseTheEnd
 		return
 	}
+
+	if ctx[0] == ';' {
+		c.process = c.parseTheEnd
+		c.Variable = ""
+		return
+	}
+
 	c.process = c.parseError
 }
 
@@ -107,7 +130,7 @@ func (c *CVariable) parseTheEnd(ctx string) {
 func (c *CVariable) StringTo(str string) *CVariable {
 	c.isParseError = false
 	c.parseString = str
-	c.process = c.parseStruct
+	c.process = c.parseStructKeywords
 	for {
 		process := c.process
 		if process == nil {
@@ -116,20 +139,19 @@ func (c *CVariable) StringTo(str string) *CVariable {
 		c.parseString = skipSpace(c.parseString)
 		process(c.parseString)
 	}
-
 	return c
 }
 
 type CStruct struct {
-	StructName        string `json:"structName"`
+	StructName        string `json:"structName,omitempty"`
 	parseString       string
 	AnonymousFunction bool        `json:"anonymousFunction"`
-	VarList           []CVariable `json:"varList"`
+	VarList           []CVariable `json:"varList,omitempty"`
 }
 
 func (c *CStruct) parseVarList() {
-	var variable CVariable
 	for {
+		var variable CVariable
 		if c.parseString == "" {
 			break
 		}
@@ -158,7 +180,7 @@ func (c *CStruct) parseStructName() {
 
 }
 
-func (c *CStruct) StringTo(str string) {
+func (c *CStruct) Parse(str string) {
 	c.parseString = str
 	c.parseStructName()
 	c.parseString = skipSpace(c.parseString)
