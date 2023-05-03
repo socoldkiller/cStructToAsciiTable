@@ -48,7 +48,7 @@ func main() {
 		return
 	}
 
-	c.StringTo(string(file))
+	c.Parse(string(file))
 	var b []byte
 	b, _ = json.Marshal(&c)
 

@@ -19,7 +19,7 @@ type CVariable struct {
 	Value          string `json:"value,omitempty"`
 	errorInfo      string
 	isParseError   bool
-	process        func(string)
+	process        func()
 	Struct         *CStruct `json:"struct,omitempty"`
 }
 
@@ -33,41 +33,53 @@ func (c *CVariable) toString() string {
 	return varData
 }
 
-func (c *CVariable) parseStruct(ctx string) {
+func (c *CVariable) parseStruct() {
 	c.Struct = &CStruct{}
 	c.Struct.Parse(c.parseString)
 	c.parseString = c.Struct.parseString
 	c.process = c.parseVariable
 }
 
-func (c *CVariable) parseError(ctx string) {
+func (c *CVariable) parseError() {
 	// fmt.Printf("\"%s\" parse error\n", ctx)
 	c.process = nil
 	c.isParseError = true
 }
 
-func (c *CVariable) parseStructKeywords(ctx string) {
+// bug.
+func (c *CVariable) parseStructKeywords() {
 	re := regexp.MustCompile("^struct")
 	c.process = c.parseTypename
 	tmp := c.parseString
-	if loc := re.FindStringIndex(ctx); loc != nil {
-		c.StructKeywords = ctx[:loc[1]]
+	f := true
+	if loc := re.FindStringIndex(c.parseString); loc != nil {
+		f = false
+		c.StructKeywords = c.parseString[:loc[1]]
 		c.parseString = c.parseString[loc[1]:]
 	}
 
+	c.parseString = skipSpace(c.parseString)
+	c.parseTypename()
 	c.parseString = skipSpace(c.parseString)
 
 	if c.parseString[0] == '{' {
 		c.parseString = tmp
 		c.process = c.parseStruct
+		return
 	}
+	c.process = c.parseTypename
+	if f == false {
+		c.parseString = tmp[6:]
+		return
+	}
+	c.parseString = tmp
 
 }
 
-func (c *CVariable) parseTypename(ctx string) {
+func (c *CVariable) parseTypename() {
 	re := regexp.MustCompile("^[_a-zA-Z][_a-zA-Z0-9]*")
-	if loc := re.FindStringIndex(ctx); loc != nil {
-		c.Typename = ctx[:loc[1]]
+	if loc := re.FindStringIndex(c.parseString); loc != nil {
+		c.Typename = c.parseString[:loc[1]]
 		c.parseString = c.parseString[loc[1]:]
 		c.process = c.parsePointer
 		return
@@ -75,14 +87,14 @@ func (c *CVariable) parseTypename(ctx string) {
 	c.process = c.parseError
 }
 
-func (c *CVariable) parsePointer(ctx string) {
+func (c *CVariable) parsePointer() {
 
-	if len(ctx) == 0 {
+	if len(c.parseString) == 0 {
 		c.process = c.parseError
 	}
 
 	// 无论是否是指针，都要跳转到值
-	if ctx[0] == '*' {
+	if c.parseString[0] == '*' {
 		c.Pointer = "*"
 		c.parseString = c.parseString[1:]
 	}
@@ -90,16 +102,16 @@ func (c *CVariable) parsePointer(ctx string) {
 	c.process = c.parseVariable
 }
 
-func (c *CVariable) parseVariable(ctx string) {
+func (c *CVariable) parseVariable() {
 	re := regexp.MustCompile("^[_a-zA-Z][_a-zA-Z0-9]*")
-	if loc := re.FindStringIndex(ctx); loc != nil {
-		c.Variable = ctx[:loc[1]]
+	if loc := re.FindStringIndex(c.parseString); loc != nil {
+		c.Variable = c.parseString[:loc[1]]
 		c.parseString = c.parseString[loc[1]:]
 		c.process = c.parseTheEnd
 		return
 	}
 
-	if ctx[0] == ';' {
+	if c.parseString[0] == ';' {
 		c.process = c.parseTheEnd
 		c.Variable = ""
 		return
@@ -108,16 +120,16 @@ func (c *CVariable) parseVariable(ctx string) {
 	c.process = c.parseError
 }
 
-func (c *CVariable) parseTheEnd(ctx string) {
+func (c *CVariable) parseTheEnd() {
 
-	if len(ctx) == 0 {
+	if len(c.parseString) == 0 {
 		c.process = c.parseError
 		c.parseString = ""
 		c.errorInfo = "missing \";\""
 		return
 	}
 
-	if ctx[0] == ';' {
+	if c.parseString[0] == ';' {
 		c.process = nil
 		c.parseString = c.parseString[1:]
 		//c.parseString = ""
@@ -137,7 +149,7 @@ func (c *CVariable) StringTo(str string) *CVariable {
 			break
 		}
 		c.parseString = skipSpace(c.parseString)
-		process(c.parseString)
+		process()
 	}
 	return c
 }
@@ -152,7 +164,9 @@ type CStruct struct {
 func (c *CStruct) parseVarList() {
 	for {
 		var variable CVariable
-		if c.parseString == "" {
+
+		c.parseString = skipSpace(c.parseString)
+		if c.parseString == "" || c.parseString[0] == '}' {
 			break
 		}
 		variable.StringTo(c.parseString)
@@ -182,6 +196,7 @@ func (c *CStruct) parseStructName() {
 
 func (c *CStruct) Parse(str string) {
 	c.parseString = str
+
 	c.parseStructName()
 	c.parseString = skipSpace(c.parseString)
 
