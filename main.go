@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"github.com/olekukonko/tablewriter"
+	"os"
 	"strings"
 )
 
@@ -36,7 +38,19 @@ func main() {
 	//	}()
 	//}()
 
-	c := CVariable{}
-	c.StringTo("    struct Label label   ;")
-	fmt.Println(c.toString())
+	//c := CVariable{}
+	//c.StringTo("struct int *p;int a;int b")
+	//
+
+	var c CStruct
+	file, err := os.ReadFile("test.abc")
+	if err != nil {
+		return
+	}
+
+	c.StringTo(string(file))
+	var b []byte
+	b, _ = json.Marshal(&c)
+
+	fmt.Printf("%s", b)
 }
