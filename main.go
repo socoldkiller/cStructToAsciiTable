@@ -42,13 +42,14 @@ func main() {
 	//c.StringTo("struct int *p;int a;int b")
 	//
 
-	var c CStruct
+	var c CVar
 	file, err := os.ReadFile("test.abc")
 	if err != nil {
 		return
 	}
 
-	c.Parse(string(file))
+	c.parse(string(file))
+	fmt.Printf("%s", c.parserErrorInfo)
 	var b []byte
 	b, _ = json.Marshal(&c)
 
