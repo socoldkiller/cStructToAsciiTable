@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
 	"unicode"
 )
 
@@ -11,6 +12,29 @@ func assert(flag bool, str string) {
 	if !flag {
 		panic(str)
 	}
+}
+
+func skipSpace(ctx string) string {
+	return strings.TrimSpace(ctx)
+}
+
+func skipComment(ctx string) string {
+
+	if len(ctx) < 2 {
+		return ctx
+	}
+
+	i := 0
+	if ctx[0:2] == "/*" {
+		for {
+			i++
+			if ctx[i:i+2] == "*/" {
+				return ctx[i+2:]
+
+			}
+		}
+	}
+	return ctx
 }
 
 type Process func()
@@ -55,6 +79,11 @@ func (c *CVar) parseTypeName() {
 		c.parseString = c.parseString[loc[1]:]
 	}
 	c.parseString = skipSpace(c.parseString)
+
+	if len(c.parseString) == 0 {
+		c.process = c.parseError
+		return
+	}
 
 	switch c.parseString[0] {
 	case '{':
@@ -149,6 +178,7 @@ func (c *CVar) parse(parseStr string) {
 		if process == nil {
 			break
 		}
+		c.parseString = skipComment(c.parseString)
 		c.parseString = skipSpace(c.parseString)
 		if len(c.parseString) == 0 {
 			c.process = c.parseError
