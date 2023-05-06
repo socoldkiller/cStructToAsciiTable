@@ -40,16 +40,16 @@ func skipComment(ctx string) string {
 type Process func()
 
 type CVar struct {
-	parseString string
-	KeyWords    string  `json:"key_words,omitempty"`
-	TypeName    string  `json:"type_name,omitempty"`
-	Pointer     string  `json:"pointer,omitempty"`
-	VarName     string  `json:"var_name,omitempty"`
-	CVarList    []*CVar `json:"c_var_list,omitempty"`
-	process     Process
-
+	parseString     string
+	KeyWords        string  `json:"key_words,omitempty"`
+	TypeName        string  `json:"type_name,omitempty"`
+	Pointer         string  `json:"pointer,omitempty"`
+	VarName         string  `json:"var_name,omitempty"`
+	CVarList        []*CVar `json:"c_var_list,omitempty"`
+	process         Process
 	isParserError   bool
 	parserErrorInfo string
+	ArrayLengthName string `json:"array_length,omitempty"`
 }
 
 func (c *CVar) getParserErrorInfo() {
@@ -103,7 +103,14 @@ func (c *CVar) parseVarName() {
 		c.VarName = c.parseString[:loc[1]]
 		c.parseString = c.parseString[loc[1]:]
 	}
-	c.process = c.parseEnd
+
+	switch c.parseString[0] {
+	case '[':
+		c.process = c.parseArray
+	default:
+		c.process = c.parseEnd
+	}
+
 }
 func (c *CVar) parsePointer() {
 
@@ -114,10 +121,31 @@ func (c *CVar) parsePointer() {
 	c.process = c.parseVarName
 }
 
+func (c *CVar) parseArray() {
+	assert(c.parseString[0] == '[', "parseArray error")
+	i := 0
+	for {
+		i++
+		if c.parseString[i] == ']' {
+			c.parseString = c.parseString[i+1:]
+			c.process = c.parseEnd
+			return
+		}
+		if i > len(c.parseString) {
+			c.process = c.parseError
+			return
+		}
+		c.ArrayLengthName += string(c.parseString[i])
+
+	}
+
+}
+
 func (c *CVar) parseCVarList() {
 	for {
 		c.parseString = skipSpace(c.parseString)
-
+		c.parseString = skipComment(c.parseString)
+		c.parseString = skipSpace(c.parseString)
 		if len(c.parseString) == 0 {
 			c.process = c.parseError
 			return
@@ -178,6 +206,7 @@ func (c *CVar) parse(parseStr string) {
 		if process == nil {
 			break
 		}
+		c.parseString = skipSpace(c.parseString)
 		c.parseString = skipComment(c.parseString)
 		c.parseString = skipSpace(c.parseString)
 		if len(c.parseString) == 0 {
