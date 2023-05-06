@@ -41,15 +41,15 @@ type Process func()
 
 type CVar struct {
 	parseString     string
-	KeyWords        string  `json:"key_words,omitempty"`
-	TypeName        string  `json:"type_name,omitempty"`
+	KeyWords        string  `json:"key-words,omitempty"`
+	TypeName        string  `json:"type-name,omitempty"`
 	Pointer         string  `json:"pointer,omitempty"`
-	VarName         string  `json:"var_name,omitempty"`
-	CVarList        []*CVar `json:"c_var_list,omitempty"`
+	VarName         string  `json:"var-name,omitempty"`
+	CVarList        []*CVar `json:"c-var-list,omitempty"`
+	ArrayLengthName string  `json:"array-length-name,omitempty"`
 	process         Process
 	isParserError   bool
 	parserErrorInfo string
-	ArrayLengthName string `json:"array_length,omitempty"`
 }
 
 func (c *CVar) getParserErrorInfo() {
@@ -113,12 +113,16 @@ func (c *CVar) parseVarName() {
 
 }
 func (c *CVar) parsePointer() {
-
-	if c.parseString[0] == '*' {
-		c.Pointer = "*"
-		c.parseString = c.parseString[1:]
+	assert(c.parseString[0] == '*', "parsePointer error")
+	c.Pointer += "*"
+	c.parseString = c.parseString[1:]
+	c.parseString = skipSpace(c.parseString)
+	switch c.parseString[0] {
+	case '*':
+		c.process = c.parsePointer
+	default:
+		c.process = c.parseVarName
 	}
-	c.process = c.parseVarName
 }
 
 func (c *CVar) parseArray() {
