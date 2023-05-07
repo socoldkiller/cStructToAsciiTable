@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/olekukonko/tablewriter"
+	"log"
 	"os"
 )
 
@@ -12,27 +13,23 @@ func SetTableFormat(table *tablewriter.Table) {
 	table.SetAutoMergeCells(true)
 	table.SetRowLine(true)
 	table.SetAlignment(tablewriter.ALIGN_CENTER)
+	table.SetHeader([]string{"TypeName", "VarName"})
 }
 
 func getTable(c *CVar, tables map[string][][]string) {
-	var writer bytes.Buffer
-	// table, _ := tablewriter.NewCSVReader(&writer, csv.NewReader(strings.NewReader(str)), true)
-	table := tablewriter.NewWriter(&writer)
-	SetTableFormat(table)
 	var t [][]string
+	t = append(t, []string{c.getTypeName(), c.VarName})
 	for _, cvar := range c.CVarList {
 		t = append(t, []string{cvar.getTypeName(), cvar.VarName})
 		if cvar.CVarList != nil {
 			getTable(cvar, tables)
 		}
 	}
-
 	tables[c.TypeName] = t
 }
 
 func getTableFormatString(data [][]string) string {
 	var writer bytes.Buffer
-	// table, _ := tablewriter.NewCSVReader(&writer, csv.NewReader(strings.NewReader(str)), true)
 	table := tablewriter.NewWriter(&writer)
 	SetTableFormat(table)
 	table.AppendBulk(data)
@@ -43,15 +40,14 @@ func getTableFormatString(data [][]string) string {
 func main() {
 	s := make(map[string][][]string)
 	var c CVar
-	file, err := os.ReadFile("test.abc")
-	if err != nil {
-		return
+	if len(os.Args) < 2 {
+		log.Fatal("args must Greater than 1")
 	}
-	data := string(file)
-	c.parse(data)
+	cStr := os.Args[1]
+	c.parse(cStr)
 	getTable(&c, s)
 	for _, v := range s {
 		fmt.Printf("%s", MultilineComment(getTableFormatString(v)))
-		fmt.Printf("\n")
+		fmt.Printf("\n\n\n")
 	}
 }
