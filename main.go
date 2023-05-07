@@ -2,12 +2,9 @@ package main
 
 import (
 	"bytes"
-	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"github.com/olekukonko/tablewriter"
 	"os"
-	"strings"
 )
 
 func SetTableFormat(table *tablewriter.Table) {
@@ -17,41 +14,44 @@ func SetTableFormat(table *tablewriter.Table) {
 	table.SetAlignment(tablewriter.ALIGN_CENTER)
 }
 
-func getTableFormatString(str string) string {
-	var b bytes.Buffer
-	table, _ := tablewriter.NewCSVReader(&b, csv.NewReader(strings.NewReader(str)), true)
+func getTable(c *CVar, tables map[string][][]string) {
+	var writer bytes.Buffer
+	// table, _ := tablewriter.NewCSVReader(&writer, csv.NewReader(strings.NewReader(str)), true)
+	table := tablewriter.NewWriter(&writer)
 	SetTableFormat(table)
+	var t [][]string
+	for _, cvar := range c.CVarList {
+		t = append(t, []string{cvar.getTypeName(), cvar.VarName})
+		if cvar.CVarList != nil {
+			getTable(cvar, tables)
+		}
+	}
+
+	tables[c.TypeName] = t
+}
+
+func getTableFormatString(data [][]string) string {
+	var writer bytes.Buffer
+	// table, _ := tablewriter.NewCSVReader(&writer, csv.NewReader(strings.NewReader(str)), true)
+	table := tablewriter.NewWriter(&writer)
+	SetTableFormat(table)
+	table.AppendBulk(data)
 	table.Render()
-	return b.String()
+	return writer.String()
 }
 
 func main() {
-	//c := os.Args[1]
-	//b := getTableFormatString(c)
-	//data := MultilineComment(b)
-	//fmt.Println(data)
-	//defer func() {
-	//	defer func() {
-	//		if r := recover(); r != nil {
-	//			fmt.Println(r)
-	//		}
-	//	}()
-	//}()
-
-	//c := CVariable{}
-	//c.StringTo("struct int *p;int a;int b")
-	//
-
+	s := make(map[string][][]string)
 	var c CVar
 	file, err := os.ReadFile("test.abc")
 	if err != nil {
 		return
 	}
-
-	c.parse(string(file))
-	fmt.Printf("%s", c.parserErrorInfo)
-	var b []byte
-	b, _ = json.Marshal(&c)
-
-	fmt.Printf("%s", b)
+	data := string(file)
+	c.parse(data)
+	getTable(&c, s)
+	for _, v := range s {
+		fmt.Printf("%s", MultilineComment(getTableFormatString(v)))
+		fmt.Printf("\n")
+	}
 }
