@@ -107,6 +107,8 @@ func (c *CVar) parseVarName() {
 	switch c.parseString[0] {
 	case '[':
 		c.process = c.parseArray
+	case ',':
+		c.process = c.parseComma
 	default:
 		c.process = c.parseEnd
 	}
@@ -154,13 +156,35 @@ func (c *CVar) parseCVarList() {
 			c.process = c.parseError
 			return
 		}
-
-		if c.parseString[0] == '}' {
+		cvar := &CVar{}
+		switch c.parseString[0] {
+		case ';':
+			c.parseEnd()
+			continue
+		case '}':
 			c.process = c.parseRightBracket
 			return
+		case ',':
+			c.parseString = c.parseString[1:]
+			c.parseString = skipSpace(c.parseString)
+			cvar.parseString = c.parseString
+			switch cvar.parseString[0] {
+			case '*':
+				cvar._parse(cvar.parseString, cvar.parsePointer)
+			default:
+				cvar._parse(cvar.parseString, cvar.parseVarName)
+			}
+			cvar.TypeName = c.CVarList[0].TypeName
+			c.parseString = skipSpace(c.parseString)
+		default:
+			cvar.parse(c.parseString)
 		}
-		cvar := &CVar{}
-		cvar.parse(c.parseString)
+
+		if cvar.isParserError {
+			c.process = c.parseError
+			return
+		}
+
 		c.CVarList = append(c.CVarList, cvar)
 		c.parseString = cvar.parseString
 	}
@@ -202,12 +226,19 @@ func (c *CVar) parseError() {
 	c.process = nil
 }
 
+func (c *CVar) parseComma() {
+	assert(c.parseString[0] == ',', "parseComma error")
+	c.process = nil
+}
+
 func (c *CVar) parse(parseStr string) {
+	c._parse(parseStr, c.parseKeyWords)
+}
+func (c *CVar) _parse(parseStr string, startProcess Process) {
 	c.parseString = parseStr
-	c.process = c.parseKeyWords
+	c.process = startProcess
 	for {
-		process := c.process
-		if process == nil {
+		if c.process == nil {
 			break
 		}
 		c.parseString = skipSpace(c.parseString)
@@ -216,6 +247,6 @@ func (c *CVar) parse(parseStr string) {
 		if len(c.parseString) == 0 {
 			c.process = c.parseError
 		}
-		process()
+		c.process()
 	}
 }
