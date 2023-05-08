@@ -5,7 +5,6 @@ import (
 	"log"
 	"regexp"
 	"strings"
-	"unicode"
 )
 
 func assert(flag bool, str string) {
@@ -54,6 +53,7 @@ type CVar struct {
 	VarName         string  `json:"var-name,omitempty"`
 	CVarList        []*CVar `json:"c-var-list,omitempty"`
 	ArrayLengthName string  `json:"array-length-name,omitempty"`
+	Comment         string  `json:"comment"`
 	process         Process
 	isParserError   bool
 	parserErrorInfo string
@@ -110,11 +110,18 @@ func (c *CVar) parseVarName() {
 		c.parseString = c.parseString[loc[1]:]
 	}
 
+	if len(c.parseString) == 0 {
+		c.process = c.parseError
+		return
+	}
+	c.parseString = skipSpace(c.parseString)
 	switch c.parseString[0] {
 	case '[':
 		c.process = c.parseArray
 	case ',':
 		c.process = c.parseComma
+	case '/':
+		c.process = c.parseComment
 	default:
 		c.process = c.parseEnd
 	}
@@ -169,9 +176,6 @@ func (c *CVar) parseCVarList() {
 		}
 		cvar := &CVar{}
 		switch c.parseString[0] {
-		case ';':
-			c.parseEnd()
-			continue
 		case '}':
 			c.process = c.parseRightBracket
 			return
@@ -189,6 +193,17 @@ func (c *CVar) parseCVarList() {
 			c.parseString = skipAll(c.parseString)
 		default:
 			cvar.parse(c.parseString)
+		}
+
+		cvar.parseString = skipSpace(cvar.parseString)
+
+		if len(cvar.parseString) == 0 {
+			c.process = c.parseError
+			return
+		}
+
+		if cvar.parseString[0] == ';' {
+			cvar.parseEnd()
 		}
 
 		if cvar.isParserError {
@@ -213,22 +228,86 @@ func (c *CVar) parseRightBracket() {
 	assert(c.parseString[0] == '}', "parser error,parseRightBracket")
 	c.parseString = c.parseString[1:]
 	c.parseString = skipAll(c.parseString)
-	if c.parseString[0] == ';' {
+
+	switch c.parseString[0] {
+	case ';':
 		c.process = c.parseEnd
-	} else if unicode.IsLetter(rune(c.parseString[0])) {
+	case '*':
+		c._parse(c.parseString, c.parsePointer)
+	default:
 		c.process = c.parseVarName
+	}
+}
+
+func (c *CVar) parseEnd() {
+	if c.parseString[0] == ';' {
+		c.parseString = c.parseString[1:]
+		c.parseString = skipSpace(c.parseString)
+
+		if len(c.parseString) == 0 {
+			c.process = nil
+			return
+		}
+
+		switch c.parseString[0] {
+		case '/':
+			c.process = c._parseComment
+		default:
+			c.process = nil
+		}
+		return
+	}
+	c.process = c.parseError
+}
+
+func (c *CVar) _parseComment() {
+	assert(c.parseString[0:2] == "/*", "_parseComment error")
+	if len(c.parseString) < 4 {
+		c.process = c.parseError
+		return
+	}
+
+	c.parseString = skipSpace(c.parseString)
+	i := 1
+	for {
+		i++
+		if c.parseString[i] == '*' {
+			i++
+			break
+		}
+		c.Comment += string(c.parseString[i])
+	}
+
+	if c.parseString[i] == '/' {
+		c.parseString = c.parseString[i+1:]
+		c.process = nil
+		return
 	} else {
 		c.process = c.parseError
 	}
 
 }
-func (c *CVar) parseEnd() {
-	if c.parseString[0] == ';' {
-		c.process = nil
-		c.parseString = c.parseString[1:]
+
+func (c *CVar) parseComment() {
+
+	if len(c.parseString) == 0 {
+		c.process = c.parseError
 		return
 	}
-	c.process = c.parseError
+
+	switch c.parseString[0] {
+	case ';':
+		c.parseString = c.parseString[1:]
+		c.parseString = skipSpace(c.parseString)
+		c.process = c.parseComment
+	case '/':
+		c._parse(c.parseString, c._parseComment)
+	case ',':
+		c.process = c.parseComma
+
+	default:
+		c.process = c.parseError
+	}
 }
 
 func (c *CVar) parseError() {
@@ -242,8 +321,21 @@ func (c *CVar) parseComma() {
 	c.process = nil
 }
 
+func (c *CVar) parseTypedef() {
+	assert(c.parseString[0:7] == "typedef", "parseTypedef Error")
+	c.parseString = c.parseString[8:]
+	c.process = c.parseKeyWords
+}
+
 func (c *CVar) parse(parseStr string) {
-	c._parse(parseStr, c.parseKeyWords)
+	c.parseString = skipAll(parseStr)
+	var startProcess Process
+	if len(c.parseString) < 8 || c.parseString[:7] != "typedef" {
+		startProcess = c.parseKeyWords
+	} else {
+		startProcess = c.parseTypedef
+	}
+	c._parse(c.parseString, startProcess)
 }
 func (c *CVar) _parse(parseStr string, startProcess Process) {
 	c.parseString = parseStr
@@ -252,7 +344,7 @@ func (c *CVar) _parse(parseStr string, startProcess Process) {
 		if c.process == nil {
 			break
 		}
-		c.parseString = skipAll(c.parseString)
+		c.parseString = skipSpace(c.parseString)
 		if len(c.parseString) == 0 {
 			c.process = c.parseError
 		}
@@ -261,10 +353,14 @@ func (c *CVar) _parse(parseStr string, startProcess Process) {
 }
 
 func (c *CVar) getTypeName() string {
+	return fmt.Sprintf("%s%s", c.TypeName, c.Pointer)
+}
+
+func (c *CVar) getVarName() string {
 	if c.ArrayLengthName != "" {
-		return fmt.Sprintf("%s%s[%s]", c.TypeName, c.Pointer, c.ArrayLengthName)
+		return fmt.Sprintf("%s[%s]", c.VarName, c.ArrayLengthName)
 	} else {
-		return fmt.Sprintf("%s%s", c.TypeName, c.Pointer)
+		return fmt.Sprintf("%s", c.VarName)
 
 	}
 }
