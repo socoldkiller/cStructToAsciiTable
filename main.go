@@ -13,14 +13,14 @@ func SetTableFormat(table *tablewriter.Table) {
 	table.SetAutoMergeCells(true)
 	table.SetRowLine(true)
 	table.SetAlignment(tablewriter.ALIGN_CENTER)
-	table.SetHeader([]string{"TypeName", "VarName"})
+	table.SetHeader([]string{"TypeName", "VarName", "Extra"})
 }
 
 func getTable(c *CVar, tables map[string][][]string) {
 	var t [][]string
-	t = append(t, []string{c.getTypeName(), c.VarName})
+	t = append(t, []string{c.getTypeName(), c.getVarName(), c.Comment})
 	for _, cvar := range c.CVarList {
-		t = append(t, []string{cvar.getTypeName(), cvar.VarName})
+		t = append(t, []string{cvar.getTypeName(), cvar.getVarName(), cvar.Comment})
 		if cvar.CVarList != nil {
 			getTable(cvar, tables)
 		}
@@ -43,6 +43,8 @@ func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("args must Greater than 1")
 	}
+	//cStr := os.Args[1]
+
 	cStr := os.Args[1]
 	c.parse(cStr)
 	getTable(&c, s)
