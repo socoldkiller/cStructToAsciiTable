@@ -271,19 +271,18 @@ func (c *CVar) _parseComment() {
 	i := 1
 	for {
 		i++
-		if c.parseString[i] == '*' {
-			i++
+		if i > len(c.parseString) {
+			c.process = c.parseError
+			break
+		}
+
+		if c.parseString[i:i+2] == "*/" {
+			i += 2
+			c.parseString = c.parseString[i:]
+			c.process = nil
 			break
 		}
 		c.Comment += string(c.parseString[i])
-	}
-
-	if c.parseString[i] == '/' {
-		c.parseString = c.parseString[i+1:]
-		c.process = nil
-		return
-	} else {
-		c.process = c.parseError
 	}
 
 }
