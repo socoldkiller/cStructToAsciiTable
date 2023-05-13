@@ -218,9 +218,7 @@ func (c *CVar) parseCVarList() {
 
 func (c *CVar) parseLeftBracket() {
 	assert(c.parseString[0] == '{', "parser error,parseLeftBracket")
-	if c.parseString[0] == '{' {
-		c.parseString = c.parseString[1:]
-	}
+	c.parseString = c.parseString[1:]
 	c.process = c.parseCVarList
 }
 
@@ -336,6 +334,7 @@ func (c *CVar) parse(parseStr string) {
 	}
 	c._parse(c.parseString, startProcess)
 }
+
 func (c *CVar) _parse(parseStr string, startProcess Process) {
 	c.parseString = parseStr
 	c.process = startProcess
