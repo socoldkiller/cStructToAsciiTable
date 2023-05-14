@@ -158,6 +158,11 @@ func (c *CVar) parseArray() {
 		c.ArrayLengthName += string(c.parseString[i])
 	}
 
+	if len(c.parseString) == 0 {
+		c.process = c.parseError
+		return
+	}
+
 	switch c.parseString[0] {
 	case ',':
 		c.process = c.parseComma
