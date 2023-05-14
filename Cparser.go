@@ -115,6 +115,12 @@ func (c *CVar) parseVarName() {
 		return
 	}
 	c.parseString = skipSpace(c.parseString)
+
+	if len(c.parseString) == 0 {
+		c.process = c.parseError
+		return
+	}
+
 	switch c.parseString[0] {
 	case '[':
 		c.process = c.parseArray
@@ -132,6 +138,12 @@ func (c *CVar) parsePointer() {
 	c.Pointer += "*"
 	c.parseString = c.parseString[1:]
 	c.parseString = skipAll(c.parseString)
+
+	if len(c.parseString) == 0 {
+		c.process = c.parseError
+		return
+	}
+
 	switch c.parseString[0] {
 	case '*':
 		c.process = c.parsePointer
@@ -234,6 +246,11 @@ func (c *CVar) parseRightBracket() {
 	c.parseString = c.parseString[1:]
 	c.parseString = skipAll(c.parseString)
 
+	if len(c.parseString) == 0 {
+		c.process = c.parseError
+		return
+	}
+
 	switch c.parseString[0] {
 	case ';':
 		c.process = c.parseEnd
@@ -333,6 +350,12 @@ func (c *CVar) parseTypedef() {
 
 func (c *CVar) parse(parseStr string) {
 	c.parseString = skipAll(parseStr)
+
+	if len(c.parseString) == 0 {
+		c.process = c.parseError
+		return
+	}
+
 	var startProcess Process
 	if len(c.parseString) < 8 || c.parseString[:7] != "typedef" {
 		startProcess = c.parseKeyWords
